@@ -37,7 +37,7 @@ revertSql = "DROP TABLE " <> migrationTableName
 hasqlBackend :: Connection -> Backend
 hasqlBackend conn =
     Backend { isBootstrapped = do
-                exists <- run (query migrationTableName (statement "SELECT migration_id FROM $1" (H.Encode.value H.Encode.bytea) unit False)) conn
+                exists <- run (query () (statement "SELECT migration_id FROM installed_migrations WHERE FALSE" H.Encode.unit unit True)) conn
                 return $ case exists of
                   Left _ -> False
                   Right _ -> True
@@ -72,14 +72,14 @@ hasqlBackend conn =
                         Right i -> return i
                   -- Remove migration from installed_migrations in either case.
                   deleteAction <- run (sql $ "DELETE FROM " <> migrationTableName <>
-                            " WHERE migration_id = " <> mId m) conn
+                            " WHERE migration_id = '" <> mId m <> "'") conn
                   case deleteAction of
                     Left e -> reportSqlError e
                     Right i -> return i
                   return ()
 
             , getMigrations = do
-                selectNames <- run (query migrationTableName (statement "SELECT migration_id FROM $1" (H.Encode.value H.Encode.bytea) (rowsList $ value bytea) False)) conn
+                selectNames <- run (query () (statement "SELECT migration_id FROM installed_migrations" H.Encode.unit (rowsList $ value bytea) False)) conn
                 results <- case selectNames of
                   Left e -> reportSqlError e
                   Right names -> return names
