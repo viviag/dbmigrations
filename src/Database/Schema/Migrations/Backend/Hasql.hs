@@ -56,7 +56,7 @@ hasqlBackend conn =
                   Left e -> reportSqlError e
                   Right i -> return i
                 register <- run (sql $ "INSERT INTO " <> migrationTableName <>
-                          " (migration_id) VALUES (" <> mId m <> ")") conn
+                          " (migration_id) VALUES ('" <> mId m <> "')") conn
                 case register of
                   Left e -> reportSqlError e
                   Right i -> return i
