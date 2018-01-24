@@ -3,12 +3,13 @@ module Main
     )
 where
 
-import Database.HDBC.PostgreSQL (connectPostgreSQL)
+import Data.ByteString.Char8 (pack)
+import Hasql.Connection
 import Prelude  hiding (lookup)
 import System.Environment (getArgs)
 import System.Exit
 
-import Database.Schema.Migrations.Backend.HDBC (hdbcBackend)
+import Database.Schema.Migrations.Backend.Hasql (hasqlBackend)
 import Moo.Core
 import Moo.Main
 
@@ -20,8 +21,12 @@ main = do
   case loadedConf of
     Left e -> putStrLn e >> exitFailure
     Right conf -> do
-      let connectionString = _connectionString conf
-      connection <- connectPostgreSQL connectionString
-      let backend = hdbcBackend connection
-          parameters = makeParameters conf backend
-      mainWithParameters args parameters
+      let connectionString = pack $ _connectionString conf
+      connection <- acquire connectionString
+      case connection of
+        Left (Just e) -> putStrLn (show e) >> exitFailure
+        Left Nothing -> putStrLn "Cannot connect to db." >> exitFailure
+        Right conn -> do
+          let backend = hasqlBackend conn
+              parameters = makeParameters conf backend
+          mainWithParameters args parameters

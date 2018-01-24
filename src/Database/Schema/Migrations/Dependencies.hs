@@ -1,4 +1,5 @@
 {-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE OverloadedStrings #-}
 -- |This module types and functions for representing a dependency
 -- graph of arbitrary objects and functions for querying such graphs
 -- to get dependency and reverse dependency information.
@@ -11,7 +12,9 @@ module Database.Schema.Migrations.Dependencies
     )
 where
 
+import Data.ByteString (ByteString)
 import Data.Maybe ( fromJust )
+import Data.Monoid ( (<>) )
 import Data.Graph.Inductive.Graph ( Graph(..), nodes, edges, Node, suc, pre, lab )
 import Data.Graph.Inductive.PatriciaTree ( Gr )
 
@@ -21,9 +24,9 @@ import Database.Schema.Migrations.CycleDetection ( hasCycle )
 -- and a list of other objects upon which they depend.
 class (Eq a, Ord a) => Dependable a where
     -- |The identifiers of the objects on which @a@ depends.
-    depsOf :: a -> [String]
+    depsOf :: a -> [ByteString]
     -- |The identifier of a 'Dependable' object.
-    depId :: a -> String
+    depId :: a -> ByteString
 
 -- |A 'DependencyGraph' represents a collection of objects together
 -- with a graph of their dependency relationships.  This is intended
@@ -31,11 +34,11 @@ class (Eq a, Ord a) => Dependable a where
 data DependencyGraph a = DG { depGraphObjectMap :: [(a, Int)]
                             -- ^ A mapping of 'Dependable' objects to
                             -- their graph vertex indices.
-                            , depGraphNameMap :: [(String, Int)]
+                            , depGraphNameMap :: [(ByteString, Int)]
                             -- ^ A mapping of 'Dependable' object
                             -- identifiers to their graph vertex
                             -- indices.
-                            , depGraph :: Gr String String
+                            , depGraph :: Gr ByteString ByteString
                             -- ^ A directed 'Gr' (graph) of the
                             -- 'Dependable' objects' dependency
                             -- relationships, with 'String' vertex and
@@ -65,14 +68,14 @@ mkDepGraph objects = if hasCycle theGraph
       n = [ (fromJust $ lookup o ids, depId o) | o <- objects ]
       e = [ ( fromJust $ lookup o ids
             , fromJust $ lookup d ids
-            , depId o ++ " -> " ++ depId d) | o <- objects, d <- depsOf' o ]
+            , depId o <> " -> " <> depId d) | o <- objects, d <- depsOf' o ]
       depsOf' o = map (\i -> fromJust $ lookup i objMap) $ depsOf o
 
       objMap = map (\o -> (depId o, o)) objects
       ids = zip objects [1..]
       names = map (\(o,i) -> (depId o, i)) ids
 
-type NextNodesFunc = Gr String String -> Node -> [Node]
+type NextNodesFunc = Gr ByteString ByteString -> Node -> [Node]
 
 cleanLDups :: (Eq a) => [a] -> [a]
 cleanLDups [] = []
@@ -82,16 +85,16 @@ cleanLDups (e:es) = if e `elem` es then (cleanLDups es) else (e:cleanLDups es)
 -- |Given a dependency graph and an ID, return the IDs of objects that
 -- the object depends on.  IDs are returned with least direct
 -- dependencies first (i.e., the apply order).
-dependencies :: (Dependable d) => DependencyGraph d -> String -> [String]
+dependencies :: (Dependable d) => DependencyGraph d -> ByteString -> [ByteString]
 dependencies g m = reverse $ cleanLDups $ dependenciesWith suc g m
 
 -- |Given a dependency graph and an ID, return the IDs of objects that
 -- depend on it.  IDs are returned with least direct reverse
 -- dependencies first (i.e., the revert order).
-reverseDependencies :: (Dependable d) => DependencyGraph d -> String -> [String]
+reverseDependencies :: (Dependable d) => DependencyGraph d -> ByteString -> [ByteString]
 reverseDependencies g m = reverse $ cleanLDups $ dependenciesWith pre g m
 
-dependenciesWith :: (Dependable d) => NextNodesFunc -> DependencyGraph d -> String -> [String]
+dependenciesWith :: (Dependable d) => NextNodesFunc -> DependencyGraph d -> ByteString -> [ByteString]
 dependenciesWith nextNodes dg@(DG _ nMap theGraph) name =
     let lookupId = fromJust $ lookup name nMap
         depNodes = nextNodes theGraph lookupId

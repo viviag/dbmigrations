@@ -6,7 +6,9 @@ module Moo.CommandHandlers where
 import Moo.Core
 import Moo.CommandUtils
 import Control.Monad ( when, forM_ )
+import Data.ByteString.Char8 ( pack, unpack )
 import Data.Maybe ( isJust )
+import Data.Monoid ( (<>) )
 import Control.Monad.Reader ( asks )
 import System.Exit ( exitWith, ExitCode(..), exitSuccess )
 import qualified Data.Time.Clock as Clock
@@ -31,8 +33,8 @@ newCommand storeData = do
   noAsk <- _noAsk <$> asks _appOptions
 
   liftIO $ do
-    fullPath <- fullMigrationName store migrationId
-    when (isJust $ storeLookup storeData migrationId) $
+    fullPath <- fullMigrationName store (pack migrationId)
+    when (isJust $ storeLookup storeData (pack migrationId)) $
          do
            putStrLn $ "Migration " ++ (show fullPath) ++ " already exists"
            exitWith (ExitFailure 1)
@@ -46,12 +48,12 @@ newCommand storeData = do
              interactiveAskDeps storeData
 
     result <- if noAsk then (return True) else
-              (confirmCreation migrationId deps)
+              (confirmCreation migrationId (map unpack deps))
 
     case result of
       True -> do
                now <- Clock.getCurrentTime
-               status <- createNewMigration store $ (newMigration migrationId) { mDeps = deps
+               status <- createNewMigration store $ (newMigration (pack migrationId)) { mDeps = deps
                                                     , mTimestamp = Just now
                                                     }
                case status of
@@ -63,100 +65,72 @@ newCommand storeData = do
 
 upgradeCommand :: CommandHandler
 upgradeCommand storeData = do
-  isTesting <-  _test <$> asks _appOptions
   withBackend $ \backend -> do
-        ensureBootstrappedBackend backend >> commitBackend backend
-        migrationNames <- missingMigrations backend storeData
-        when (null migrationNames) $ do
-                           putStrLn "Database is up to date."
-                           exitSuccess
-        forM_ migrationNames $ \migrationName -> do
-            m <- lookupMigration storeData migrationName
-            apply m storeData backend False
-        case isTesting of
-          True -> do
-                 rollbackBackend backend
-                 putStrLn "Upgrade test successful."
-          False -> do
-                 commitBackend backend
-                 putStrLn "Database successfully upgraded."
+    ensureBootstrappedBackend backend
+    migrationNames <- missingMigrations backend storeData
+    when (null migrationNames) $ do
+                       putStrLn "Database is up to date."
+                       exitSuccess
+    forM_ migrationNames $ \migrationName -> do
+        m <- lookupMigration storeData migrationName
+        apply m storeData backend False
+    putStrLn "Database successfully upgraded."
 
 upgradeListCommand :: CommandHandler
 upgradeListCommand storeData = do
   withBackend $ \backend -> do
-        ensureBootstrappedBackend backend >> commitBackend backend
+        ensureBootstrappedBackend backend
         migrationNames <- missingMigrations backend storeData
         when (null migrationNames) $ do
                                putStrLn "Database is up to date."
                                exitSuccess
         putStrLn "Migrations to install:"
-        forM_ migrationNames (putStrLn . ("  " ++))
+        forM_ migrationNames (putStrLn . unpack . ("  " <>))
 
 reinstallCommand :: CommandHandler
 reinstallCommand storeData = do
-  isTesting <-  _test <$> asks _appOptions
   required <- asks _appRequiredArgs
   let [migrationId] = required
 
   withBackend $ \backend -> do
-      ensureBootstrappedBackend backend >> commitBackend backend
-      m <- lookupMigration storeData migrationId
+      ensureBootstrappedBackend backend
+      m <- lookupMigration storeData (pack migrationId)
 
       revert m storeData backend
       apply m storeData backend True
 
-      case isTesting of
-        False -> do
-          commitBackend backend
-          putStrLn "Migration successfully reinstalled."
-        True -> do
-          rollbackBackend backend
-          putStrLn "Reinstall test successful."
+      putStrLn "Migration successfully reinstalled."
 
 listCommand :: CommandHandler
 listCommand _ = do
   withBackend $ \backend -> do
-      ensureBootstrappedBackend backend >> commitBackend backend
+      ensureBootstrappedBackend backend
       ms <- getMigrations backend
       forM_ ms $ \m ->
-          when (not $ m == rootMigrationName) $ putStrLn m
+          when (not $ m == rootMigrationName) $ putStrLn (unpack m)
 
 applyCommand :: CommandHandler
 applyCommand storeData = do
-  isTesting <-  _test <$> asks _appOptions
   required  <- asks _appRequiredArgs
   let [migrationId] = required
 
   withBackend $ \backend -> do
-        ensureBootstrappedBackend backend >> commitBackend backend
-        m <- lookupMigration storeData migrationId
+        ensureBootstrappedBackend backend
+        m <- lookupMigration storeData (pack migrationId)
         apply m storeData backend True
-        case isTesting of
-          False -> do
-            commitBackend backend
-            putStrLn "Successfully applied migrations."
-          True -> do
-            rollbackBackend backend
-            putStrLn "Migration installation test successful."
+        putStrLn "Successfully applied migrations."
 
 revertCommand :: CommandHandler
 revertCommand storeData = do
-  isTesting <-  _test <$> asks _appOptions
   required <- asks _appRequiredArgs
   let [migrationId] = required
 
   withBackend $ \backend -> do
-      ensureBootstrappedBackend backend >> commitBackend backend
-      m <- lookupMigration storeData migrationId
+      ensureBootstrappedBackend backend
+      m <- lookupMigration storeData (pack migrationId)
       revert m storeData backend
 
-      case isTesting of
-        False -> do
-          commitBackend backend
-          putStrLn "Successfully reverted migrations."
-        True -> do
-          rollbackBackend backend
-          putStrLn "Migration uninstallation test successful."
+      putStrLn "Successfully reverted migrations."
 
 testCommand :: CommandHandler
 testCommand storeData = do
@@ -164,16 +138,16 @@ testCommand storeData = do
   let [migrationId] = required
 
   withBackend $ \backend -> do
-        ensureBootstrappedBackend backend >> commitBackend backend
-        m <- lookupMigration storeData migrationId
+        ensureBootstrappedBackend backend
+        m <- lookupMigration storeData (pack migrationId)
         migrationNames <- missingMigrations backend storeData
         -- If the migration is already installed, remove it as part of
         -- the test
-        when (not $ migrationId `elem` migrationNames) $
+        when (not $ (pack migrationId) `elem` migrationNames) $
              do revert m storeData backend
                 return ()
         applied <- apply m storeData backend True
         forM_ (reverse applied) $ \migration -> do
                              revert migration storeData backend
-        rollbackBackend backend
+        revert m storeData backend
         putStrLn "Successfully tested migrations."

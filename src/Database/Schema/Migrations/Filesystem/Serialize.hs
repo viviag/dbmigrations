@@ -1,17 +1,21 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Database.Schema.Migrations.Filesystem.Serialize
     ( serializeMigration
     )
 where
 
+import Data.ByteString (ByteString)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as BSC
 import Data.Time () -- for UTCTime Show instance
 import Data.Maybe ( catMaybes )
-import Data.List ( intercalate )
+import Data.Monoid ( (<>) )
 
 import Database.Schema.Migrations.Migration
     ( Migration(..)
     )
 
-type FieldSerializer = Migration -> Maybe String
+type FieldSerializer = Migration -> Maybe ByteString
 
 fieldSerializers :: [FieldSerializer]
 fieldSerializers = [ serializeDesc
@@ -25,48 +29,48 @@ serializeDesc :: FieldSerializer
 serializeDesc m =
     case mDesc m of
       Nothing -> Nothing
-      Just desc -> Just $ "Description: " ++ desc
+      Just desc -> Just $ "Description: " <> desc
 
 serializeTimestamp :: FieldSerializer
 serializeTimestamp m =
     case mTimestamp m of
         Nothing -> Nothing
-        Just ts -> Just $ "Created: " ++ (show ts)
+        Just ts -> Just $ "Created: " <> (BSC.pack . show $ ts)
 
 serializeDepends :: FieldSerializer
-serializeDepends m = Just $ "Depends: " ++ (intercalate " " $ mDeps m)
+serializeDepends m = Just $ "Depends: " <> (BS.intercalate " " $ mDeps m)
 
 serializeRevert :: FieldSerializer
 serializeRevert m =
     case mRevert m of
       Nothing -> Nothing
-      Just revert -> Just $ "Revert: |\n" ++
+      Just revert -> Just $ "Revert: |\n" <>
                      (serializeMultiline revert)
 
 serializeApply :: FieldSerializer
-serializeApply m = Just $ "Apply: |\n" ++ (serializeMultiline $ mApply m)
+serializeApply m = Just $ "Apply: |\n" <> (serializeMultiline $ mApply m)
 
-commonPrefix :: String -> String -> String
-commonPrefix a b = map fst $ takeWhile (uncurry (==)) (zip a b)
+commonPrefix :: ByteString -> ByteString -> ByteString
+commonPrefix a b = fst $ BSC.unzip $ takeWhile (uncurry (==)) (BSC.zip a b)
 
-commonPrefixLines :: [String] -> String
+commonPrefixLines :: [ByteString] -> ByteString
 commonPrefixLines [] = ""
 commonPrefixLines theLines = foldl1 commonPrefix theLines
 
-serializeMultiline :: String -> String
+serializeMultiline :: ByteString -> ByteString
 serializeMultiline s =
-    let sLines = lines s
-        prefix = case commonPrefixLines sLines of
+    let sLines = BSC.lines s
+        prefix = if BSC.head (commonPrefixLines sLines) == ' '
                    -- If the lines already have a common prefix that
                    -- begins with whitespace, no new prefix is
                    -- necessary.
-                   (' ':_) -> ""
+                   then ""
                    -- Otherwise, use a new prefix of two spaces.
-                   _ -> "  "
+                   else " "
 
-    in unlines $ map (prefix ++) sLines
+    in BSC.unlines $ map (prefix <>) sLines
 
-serializeMigration :: Migration -> String
-serializeMigration m = intercalate "\n" fields
+serializeMigration :: Migration -> ByteString
+serializeMigration m = BS.intercalate "\n" fields
     where
       fields = catMaybes [ f m | f <- fieldSerializers ]

@@ -10,7 +10,6 @@ module Moo.Main
 where
 
 import  Control.Monad.Reader (forM_, runReaderT, when)
-import  Database.HDBC (SqlError, catchSql, seErrorMsg)
 import  Prelude  hiding (lookup)
 import  System.Environment (getProgName)
 import  System.Exit (ExitCode (ExitFailure), exitWith)
@@ -86,9 +85,4 @@ mainWithParameters args parameters = do
                               , _appTimestampFilenames =
                                   _parametersTimestampFilenames parameters
                               }
-            runReaderT (_cHandler command storeData) st `catchSql` reportSqlError
-
-reportSqlError :: SqlError -> IO a
-reportSqlError e = do
-  putStrLn $ "\n" ++ "A database error occurred: " ++ seErrorMsg e
-  exitWith (ExitFailure 1)
+            runReaderT (_cHandler command storeData) st

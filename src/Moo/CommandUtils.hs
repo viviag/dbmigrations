@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Moo.CommandUtils
        ( apply
        , confirmCreation
@@ -9,11 +10,12 @@ module Moo.CommandUtils
        , getCurrentTimestamp
        ) where
 
-import Control.Applicative
 import Control.Exception ( finally )
 import Control.Monad ( when, forM_, unless )
 import Control.Monad.Reader ( asks )
 import Control.Monad.Trans ( liftIO )
+import Data.ByteString (ByteString)
+import qualified Data.ByteString.Char8 as BSC
 import Data.List ( intercalate, sortBy, isPrefixOf )
 import Data.Time.Clock (getCurrentTime)
 import Data.Maybe ( fromJust, isJust )
@@ -48,11 +50,11 @@ apply m storeData backend complain = do
       nothingToDo =
         when complain $
              putStrLn $ "Nothing to do; " ++
-                          mId m ++
+                          BSC.unpack (mId m) ++
                           " already installed."
 
       applyIt conn it = do
-        putStr $ "Applying: " ++ mId it ++ "... "
+        putStr $ "Applying: " ++ BSC.unpack (mId it) ++ "... "
         applyMigration conn it
         putStrLn "done."
 
@@ -69,21 +71,21 @@ revert m storeData backend = do
     where
       nothingToDo =
         putStrLn $ "Nothing to do; " ++
-                 mId m ++
+                 BSC.unpack (mId m) ++
                  " not installed."
 
       revertIt conn it = do
-        putStr $ "Reverting: " ++ mId it ++ "... "
+        putStr $ "Reverting: " ++ BSC.unpack (mId it) ++ "... "
         revertMigration conn it
         putStrLn "done."
 
 
-lookupMigration :: StoreData -> String -> IO Migration
+lookupMigration :: StoreData -> ByteString -> IO Migration
 lookupMigration storeData name = do
   let theMigration = storeLookup storeData name
   case theMigration of
     Nothing -> do
-      putStrLn $ "No such migration: " ++ name
+      putStrLn $ "No such migration: " ++ BSC.unpack name
       exitWith (ExitFailure 1)
     Just m' -> return m'
 
@@ -162,7 +164,7 @@ data AskDepsChoice = Yes | No | View | Done | Quit
 
 -- Interactively ask the user about which dependencies should be used
 -- when creating a new migration.
-interactiveAskDeps :: StoreData -> IO [String]
+interactiveAskDeps :: StoreData -> IO [ByteString]
 interactiveAskDeps storeData = do
   -- For each migration in the store, starting with the most recently
   -- added, ask the user if it should be added to a dependency list
@@ -174,10 +176,10 @@ interactiveAskDeps storeData = do
 -- Recursive function to prompt the user for dependencies and let the
 -- user view information about potential dependencies.  Returns a list
 -- of migration names which were selected.
-interactiveAskDeps' :: StoreData -> [String] -> IO [String]
+interactiveAskDeps' :: StoreData -> [ByteString] -> IO [ByteString]
 interactiveAskDeps' _ [] = return []
 interactiveAskDeps' storeData (name:rest) = do
-  result <- prompt ("Depend on '" ++ name ++ "'?") askDepsChoices
+  result <- prompt ("Depend on '" ++ BSC.unpack name ++ "'?") askDepsChoices
   if result == Done then return [] else
         case result of
           Yes -> do
@@ -190,11 +192,11 @@ interactiveAskDeps' storeData (name:rest) = do
             -- print out description, timestamp, deps
             when (isJust $ mDesc m)
                      (putStrLn $ "  Description: " ++
-                                    fromJust  (mDesc m))
+                                    BSC.unpack (fromJust  (mDesc m)))
             putStrLn $ "      Created: " ++ show (mTimestamp m)
             unless (null $ mDeps m)
                      (putStrLn $ "  Deps: " ++
-                                   intercalate "\n        "  (mDeps m))
+                                   BSC.unpack (BSC.intercalate "\n        "  (mDeps m)))
             -- ask again
             interactiveAskDeps' storeData (name:rest)
           Quit -> do

@@ -125,8 +125,6 @@ revertMigrationFailure conn = do
 
     installedBeforeRevert <- getMigrations backend
 
-    commitBackend backend
-
     -- Revert the migrations, ignore exceptions; the revert will fail,
     -- but withTransaction will roll back.
     ignoreSqlExceptions conn $ withTransaction conn $ \conn' -> do
