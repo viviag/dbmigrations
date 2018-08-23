@@ -1,5 +1,0 @@
-resolver: lts-12.7
-extra-deps:
-- yaml-light-0.1.4
-- HsSyck-0.53
-- hasql-1.1.1

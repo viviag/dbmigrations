@@ -3,4 +3,3 @@
 cabal.sandbox.config
 dist
 dist-newstyle
-.stack-work
