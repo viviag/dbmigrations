@@ -70,7 +70,7 @@ Library
 
   Build-Depends:
     base >= 4 && < 5,
-    hasql >= 1.1.1,
+    hasql == 1.1.1,
     time >= 1.4,
     random >= 1.0,
     containers >= 0.2,
@@ -122,7 +122,7 @@ test-suite dbmigrations-tests
     yaml-light >= 0.1,
     bytestring >= 0.9,
     MissingH,
-    hasql,
+    hasql == 1.1.1,
     HUnit >= 1.2,
     process >= 1.1,
     configurator >= 0.2,
@@ -159,7 +159,7 @@ Executable moo
     base >= 4 && < 5,
     configurator >= 0.2,
     dbmigrations,
-    hasql >= 1.1.1,
+    hasql == 1.1.1,
     bytestring
 
   if impl(ghc >= 6.12.0)
