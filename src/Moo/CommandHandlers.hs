@@ -5,6 +5,7 @@ module Moo.CommandHandlers where
 
 import Moo.Core
 import Moo.CommandUtils
+import Control.Applicative
 import Control.Monad ( when, forM_ )
 import Data.Maybe ( isJust )
 import Control.Monad.Reader ( asks )

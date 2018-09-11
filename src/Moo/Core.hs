@@ -13,6 +13,7 @@ module Moo.Core
     , envStoreName
     , loadConfiguration) where
 
+import Control.Applicative
 import Control.Monad.Reader (ReaderT)
 import qualified Data.Configurator as C
 import Data.Configurator.Types (Config, Configured)

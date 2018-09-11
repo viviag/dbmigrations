@@ -1,26 +1,18 @@
-# Use new container infrastructure to enable caching
-sudo: false
-
 # Do not choose a language; we provide our own build tools.
 language: generic
 
-# Ensure necessary system libraries are present
-#addons:
-#  apt:
-#    packages:
-#      - libgmp-dev
-
 before_install:
-# Download and unpack cabal executable
+- wget https://www.haskell.org/platform/download/8.4.3/haskell-platform-8.4.3-unknown-posix--full-x86_64.tar.gz
+- tar xf haskell-platform-8.4.3-unknown-posix--full-x86_64.tar.gz
+- sudo ./install-haskell-platform.sh
 - mkdir -p ~/.local/bin
 - export PATH=$HOME/.local/bin:$PATH
-- travis_retry apt install haskell-platform
 - cabal update
+- cabal --version
 
 install:
-- cabal install --only-dependencies --enable-tests
+- cabal install --enable-tests
 
 script:
-- cabal build
 - cabal test
 - cabal haddock
